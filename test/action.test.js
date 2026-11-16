@@ -68,7 +68,8 @@ test('fork PR uses the PR head and the receiving repository, and writes all outp
   assert.equal(api.calls[1].searchParams.get('head_sha'), 'head-sha');
   assert.ok(api.calls.every(url => url.pathname.startsWith('/repos/base/project/')));
   assert.equal(outputs.workflow_status, 'in_progress');
-  assert.deepEqual(JSON.parse(outputs.jobs), { test: [job] });
+  assert.equal(outputs.workflow_state, 'in_progress');
+  assert.deepEqual(JSON.parse(outputs.jobs), { test: [{ ...job, state: 'in_progress' }] });
   assert.equal(writes.length, 1);
   assert.equal(writes[0][0], 'output.txt');
   assert.deepEqual(parseOutputs(writes[0][1]), outputs);
@@ -163,5 +164,6 @@ test('the distributed action runs end to end against an HTTP API and writes runn
   const outputs = parseOutputs(await readFile(outputPath, 'utf8'));
   assert.equal(outputs.found, 'true');
   assert.equal(outputs.run_attempt, '2');
-  assert.deepEqual(JSON.parse(outputs.jobs), { test: [job] });
+  assert.equal(outputs.workflow_state, 'in_progress');
+  assert.deepEqual(JSON.parse(outputs.jobs), { test: [{ ...job, state: 'in_progress' }] });
 });

@@ -60,6 +60,7 @@ export function groupJobs(jobs) {
       name,
       status: text(job.status, 'job status'),
       conclusion: conclusion(job.conclusion),
+      state: job.status === 'completed' ? job.conclusion : job.status,
     };
     (grouped[name] ??= []).push(value);
   }
@@ -106,7 +107,7 @@ export async function headChecksStatus(api, { repository, runId, sha }) {
   }
   if (!selected) {
     return {
-      found: 'false', workflow_status: '', workflow_conclusion: '',
+      found: 'false', workflow_status: '', workflow_conclusion: '', workflow_state: '',
       run_id: '', run_attempt: '', jobs: '{}',
     };
   }
@@ -119,6 +120,7 @@ export async function headChecksStatus(api, { repository, runId, sha }) {
     found: 'true',
     workflow_status: run.status,
     workflow_conclusion: run.status === 'completed' ? (run.conclusion ?? '') : '',
+    workflow_state: run.status === 'completed' ? (run.conclusion ?? '') : run.status,
     run_id: String(run.id),
     run_attempt: String(run.run_attempt),
     jobs: JSON.stringify(groupJobs(jobs)),
