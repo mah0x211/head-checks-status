@@ -28,11 +28,51 @@ jobs:
       actions: read
     outputs:
       found: ${{ steps.detect.outputs.found }}
+      workflow_status: ${{ steps.detect.outputs.workflow_status }}
+      workflow_conclusion: ${{ steps.detect.outputs.workflow_conclusion }}
+      run_id: ${{ steps.detect.outputs.run_id }}
+      run_attempt: ${{ steps.detect.outputs.run_attempt }}
       jobs: ${{ steps.detect.outputs.jobs }}
     steps:
       - id: detect
         uses: mah0x211/head-checks-status@v1
+
+      # Within this job, read the action step's outputs directly.
+      - name: Show detected workflow status
+        if: steps.detect.outputs.found == 'true'
+        env:
+          STATUS: ${{ steps.detect.outputs.workflow_status }}
+          CONCLUSION: ${{ steps.detect.outputs.workflow_conclusion }}
+        run: |
+          printf 'Status: %s\nConclusion: %s\n' "$STATUS" "$CONCLUSION"
+
+  report-head-checks:
+    runs-on: ubuntu-latest
+    needs: detect-head-checks
+    # Across jobs, read the outputs exported by the detection job.
+    if: needs.detect-head-checks.outputs.found == 'true'
+    steps:
+      - name: Use workflow and job results
+        env:
+          RUN_ID: ${{ needs.detect-head-checks.outputs.run_id }}
+          RUN_ATTEMPT: ${{ needs.detect-head-checks.outputs.run_attempt }}
+          JOBS: ${{ needs.detect-head-checks.outputs.jobs }}
+          TEST_FAILED: ${{ contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.conclusion, 'failure') }}
+        run: |
+          printf 'Selected run: %s (attempt %s)\n' "$RUN_ID" "$RUN_ATTEMPT"
+          printf 'Any failed job named test: %s\n' "$TEST_FAILED"
+          printf 'Jobs JSON: %s\n' "$JOBS"
 ```
+
+Use `steps.detect.outputs.<name>` in later steps of the same job. To use a
+value in another job, first export it under the detection job's `outputs`,
+declare that job in `needs`, and read `needs.detect-head-checks.outputs.<name>`.
+The example also parses the `jobs` JSON to check whether any job named `test`
+failed. Replace `test` with the exact job display name you want to inspect.
+
+Both reporting steps are skipped when `found` is `'false'`. Conditions for
+running or skipping your project's tests remain your choice; reporting a state
+does not transfer the source workflow's check result.
 
 The `v1` reference is the intended published version tag; use a published
 commit SHA to pin an exact version. No consumer checkout is needed.
