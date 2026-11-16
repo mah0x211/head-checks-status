@@ -1,0 +1,26 @@
+name: Head checks status
+description: Report the latest push workflow attempt and its jobs for the caller's head commit.
+author: mah0x211
+branding:
+  icon: check-circle
+  color: blue
+inputs:
+  token:
+    description: GitHub token with actions read permission.
+    default: ${{ github.token }}
+outputs:
+  found:
+    description: Whether a matching push workflow attempt was found.
+  workflow_status:
+    description: Workflow status reported by GitHub, or empty when not found.
+  workflow_conclusion:
+    description: Workflow conclusion, or empty when unfinished or not found.
+  run_id:
+    description: Selected workflow run ID, or empty when not found.
+  run_attempt:
+    description: Selected attempt number, or empty when not found.
+  jobs:
+    description: JSON object mapping job names to arrays of job IDs, names, statuses and conclusions.
+runs:
+  using: node24
+  main: src/index.js

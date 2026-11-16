@@ -1,0 +1,15 @@
+{
+  "name": "head-checks-status",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Report existing push workflow and job states for the caller's head commit.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
+  },
+  "license": "MIT"
+}
