@@ -30,6 +30,7 @@ jobs:
       found: ${{ steps.detect.outputs.found }}
       workflow_status: ${{ steps.detect.outputs.workflow_status }}
       workflow_conclusion: ${{ steps.detect.outputs.workflow_conclusion }}
+      workflow_state: ${{ steps.detect.outputs.workflow_state }}
       run_id: ${{ steps.detect.outputs.run_id }}
       run_attempt: ${{ steps.detect.outputs.run_attempt }}
       jobs: ${{ steps.detect.outputs.jobs }}
@@ -38,13 +39,12 @@ jobs:
         uses: mah0x211/head-checks-status@v1
 
       # Within this job, read the action step's outputs directly.
-      - name: Show detected workflow status
+      - name: Show detected workflow state
         if: steps.detect.outputs.found == 'true'
         env:
-          STATUS: ${{ steps.detect.outputs.workflow_status }}
-          CONCLUSION: ${{ steps.detect.outputs.workflow_conclusion }}
+          STATE: ${{ steps.detect.outputs.workflow_state }}
         run: |
-          printf 'Status: %s\nConclusion: %s\n' "$STATUS" "$CONCLUSION"
+          printf 'Workflow state: %s\n' "$STATE"
 
   report-head-checks:
     runs-on: ubuntu-latest
@@ -52,12 +52,12 @@ jobs:
     # Across jobs, read the outputs exported by the detection job.
     if: needs.detect-head-checks.outputs.found == 'true'
     steps:
-      - name: Use workflow and job results
+      - name: Use workflow and job state
         env:
           RUN_ID: ${{ needs.detect-head-checks.outputs.run_id }}
           RUN_ATTEMPT: ${{ needs.detect-head-checks.outputs.run_attempt }}
           JOBS: ${{ needs.detect-head-checks.outputs.jobs }}
-          TEST_FAILED: ${{ contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.conclusion, 'failure') }}
+          TEST_FAILED: ${{ contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.state, 'failure') }}
         run: |
           printf 'Selected run: %s (attempt %s)\n' "$RUN_ID" "$RUN_ATTEMPT"
           printf 'Any failed job named test: %s\n' "$TEST_FAILED"
@@ -90,6 +90,7 @@ Every action output is a string.
 | `found` | `'true'` when an existing push run was found | `'false'` |
 | `workflow_status` | Selected attempt's API status | Empty |
 | `workflow_conclusion` | API conclusion when completed | Empty |
+| `workflow_state` | Conclusion when completed, otherwise status | Empty |
 | `run_id` | Selected workflow run ID | Empty |
 | `run_attempt` | Selected attempt number | Empty |
 | `jobs` | Job names mapped to arrays, encoded as JSON | `'{}'` |
@@ -102,11 +103,17 @@ For example:
 ```json
 {
   "test": [
-    {"id": 123, "name": "test", "status": "completed", "conclusion": "success"},
-    {"id": 456, "name": "test", "status": "in_progress", "conclusion": null}
+    {"id": 123, "name": "test", "status": "completed", "conclusion": "success", "state": "success"},
+    {"id": 456, "name": "test", "status": "in_progress", "conclusion": null, "state": "in_progress"}
   ]
 }
 ```
+
+Use `workflow_state` and each job's `state` for conditions: when
+`status == 'completed'` they contain the conclusion; otherwise they contain
+the status. Original `status` and `conclusion` fields remain available.
+If a completed run has no conclusion, `workflow_state` is empty and the
+corresponding job's `state` is JSON `null`; no success or failure is inferred.
 
 Each name always maps to an array, even for one job. Repeated names and matrix
 jobs retain every returned job. Array entries are ordered by numeric job ID;
@@ -119,17 +126,27 @@ spaces or punctuation can be accessed with bracket notation.
 
 ### Conditions
 
-The detection job above exposes the action's JSON as its `jobs` output.
-Consumers choose their own rules, for example:
+The detection job above exports the action outputs. Consumers choose their
+own rules. For example, run when no successful or active push workflow exists:
+
+```yaml
+if: >-
+  !contains(
+    fromJSON('["success", "queued", "in_progress"]'),
+    needs.detect-head-checks.outputs.workflow_state
+  )
+```
+
+For job-specific conditions, parse the `jobs` JSON:
 
 ```yaml
 # At least one job named test failed.
-if: contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.conclusion, 'failure')
+if: contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.state, 'failure')
 ```
 
 ```yaml
 # At least one job named test is still running.
-if: contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.status, 'in_progress')
+if: contains(fromJSON(needs.detect-head-checks.outputs.jobs).test.*.state, 'in_progress')
 ```
 
 For a single step's output use `fromJSON(steps.detect.outputs.jobs)` instead.

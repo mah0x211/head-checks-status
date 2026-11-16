@@ -15,12 +15,14 @@ outputs:
     description: Workflow status reported by GitHub, or empty when not found.
   workflow_conclusion:
     description: Workflow conclusion, or empty when unfinished or not found.
+  workflow_state:
+    description: Workflow conclusion when completed, otherwise its status; empty when not found.
   run_id:
     description: Selected workflow run ID, or empty when not found.
   run_attempt:
     description: Selected attempt number, or empty when not found.
   jobs:
-    description: JSON object mapping job names to arrays of job IDs, names, statuses and conclusions.
+    description: JSON object mapping job names to arrays of job IDs, names, statuses, conclusions and unified state.
 runs:
   using: node24
   main: src/index.js

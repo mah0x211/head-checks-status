@@ -47,7 +47,7 @@ function fixture(runs, { jobs = [], attempts = runs } = {}) {
 test('not found has explicit empty outputs and no job request', async () => {
   const api = fixture([]);
   assert.deepEqual(await headChecksStatus(api, context), {
-    found: 'false', workflow_status: '', workflow_conclusion: '',
+    found: 'false', workflow_status: '', workflow_conclusion: '', workflow_state: '',
     run_id: '', run_attempt: '', jobs: '{}',
   });
   assert.equal(api.calls.length, 2);
@@ -90,10 +90,10 @@ test('keeps workflow failure and job conclusions without deciding to rerun', asy
   assert.equal(outputs.workflow_conclusion, 'failure');
   assert.deepEqual(JSON.parse(outputs.jobs), {
     test: [
-      { id: 1, name: 'test', status: 'completed', conclusion: 'success' },
-      { id: 2, name: 'test', status: 'completed', conclusion: 'failure' },
+      { id: 1, name: 'test', status: 'completed', conclusion: 'success', state: 'success' },
+      { id: 2, name: 'test', status: 'completed', conclusion: 'failure', state: 'failure' },
     ],
-    'test (24)': [{ id: 3, name: 'test (24)', status: 'queued', conclusion: null }],
+    'test (24)': [{ id: 3, name: 'test (24)', status: 'queued', conclusion: null, state: 'queued' }],
   });
 });
 
@@ -168,4 +168,40 @@ test('invalid context is rejected before any request', async () => {
 test('API failures propagate', async () => {
   const api = { get: async () => { throw new Error('API unavailable'); } };
   await assert.rejects(headChecksStatus(api, context), /API unavailable/);
+});
+
+test('workflow_state exposes conclusions after completion and statuses before completion', async () => {
+  const cases = [
+    ['completed', 'success', 'success', 'success'],
+    ['completed', 'failure', 'failure', 'failure'],
+    ['completed', 'cancelled', 'cancelled', 'cancelled'],
+    ['completed', 'skipped', 'skipped', 'skipped'],
+    ['completed', 'timed_out', 'timed_out', 'timed_out'],
+    ['completed', null, '', ''],
+    ['queued', null, 'queued', ''],
+    ['in_progress', null, 'in_progress', ''],
+    ['waiting', null, 'waiting', ''],
+    ['in_progress', 'success', 'in_progress', ''],
+  ];
+  for (const [status, conclusion, expected, existingConclusion] of cases) {
+    const output = await headChecksStatus(fixture([run({ status, conclusion })]), context);
+    assert.equal(output.workflow_state, expected);
+    assert.equal(output.workflow_status, status);
+    assert.equal(output.workflow_conclusion, existingConclusion);
+  }
+});
+
+test('each job has unified state while its original status and conclusion are preserved', () => {
+  const jobs = [
+    { id: 1, name: 'test', status: 'completed', conclusion: 'success' },
+    { id: 2, name: 'test', status: 'completed', conclusion: 'failure' },
+    { id: 3, name: 'test', status: 'queued', conclusion: null },
+    { id: 4, name: 'test', status: 'in_progress', conclusion: null },
+    { id: 5, name: 'test', status: 'completed', conclusion: null },
+    { id: 6, name: 'test', status: 'in_progress', conclusion: 'success' },
+  ];
+  const grouped = groupJobs(jobs);
+  assert.deepEqual(grouped.test.map(job => job.state),
+    ['success', 'failure', 'queued', 'in_progress', null, 'in_progress']);
+  assert.deepEqual(grouped.test.map(({ state, ...original }) => original), jobs);
 });
